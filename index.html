@@ -1037,7 +1037,44 @@
     var active=document.activeElement;
     return active===selEl||(active&&active.closest&&active.closest('[data-preview-editing="true"]')===selEl);
   }
+  function focusSelectedTextEnd(){
+    if(!selEl||!canEditText(selEl))return false;
+    selEl.focus();
+    var range=document.createRange();
+    range.selectNodeContents(selEl);
+    range.collapse(false);
+    var selection=window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+  function insertSelectedTextLineBreak(){
+    if(!selEl||!canEditText(selEl))return false;
+    if(!isEditingSelectedText()&&!focusSelectedTextEnd())return false;
+    if(document.queryCommandSupported&&document.queryCommandSupported('insertLineBreak')){
+      document.execCommand('insertLineBreak');
+    } else {
+      var br=document.createElement('br');
+      var selection=window.getSelection();
+      if(!selection.rangeCount)focusSelectedTextEnd();
+      var range=selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(br);
+      range.setStartAfter(br);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    selEl.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertLineBreak'}));
+    paintSel();
+    return true;
+  }
   function stopPageShortcutWhileEditing(e){
+    if(e.key==='Enter'&&MODE!=='interact'&&selEl&&canEditText(selEl)){
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+      insertSelectedTextLineBreak();
+      return;
+    }
     if(!isEditingSelectedText())return;
     if(e.key==='Escape')return;
     e.stopImmediatePropagation();
