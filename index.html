@@ -686,6 +686,13 @@
                 <input type="text" id="fontSize" data-min="1" data-max="300" inputmode="numeric" value="16">
               </div>
             </label>
+            <label class="size-field" style="margin-top:8px;">
+              <span>줄간격</span>
+              <div class="range-field">
+                <input type="range" id="lineHeightRange" min="8" max="240" step="1" value="24">
+                <input type="text" id="lineHeight" data-min="1" data-max="400" inputmode="numeric" value="24">
+              </div>
+            </label>
           </div>
           <div class="size-note">프리뷰 텍스트는 선택 후 바로 수정할 수 있습니다.</div>
         </div>
@@ -758,6 +765,8 @@
   const vAlign = $('vAlign');
   const fontSize = $('fontSize');
   const fontSizeRange = $('fontSizeRange');
+  const lineHeight = $('lineHeight');
+  const lineHeightRange = $('lineHeightRange');
 
   const STORAGE_KEY = 'code-to-html:draft';
   const INPUT_VISIBLE_KEY = 'code-to-html:input-visible';
@@ -890,6 +899,7 @@
       width:Math.round(r.width),
       height:Math.round(r.height),
       fontSize:Math.round(parseFloat(getComputedStyle(el).fontSize)||0),
+      lineHeight:Math.round(parseFloat(getComputedStyle(el).lineHeight)||0),
       canTextEdit:canEditText(el)
     };
   }
@@ -907,6 +917,7 @@
         width:Math.round(r.width),
         height:Math.round(r.height),
         fontSize:Math.round(parseFloat(getComputedStyle(el).fontSize)||0),
+        lineHeight:Math.round(parseFloat(getComputedStyle(el).lineHeight)||0),
         canTextEdit:canEditText(el)
       });
     }
@@ -1612,15 +1623,19 @@
     const width = data.width || '';
     const height = data.height || '';
     const font = data.fontSize || parseInt(style['font-size'], 10) || 16;
+    const line = data.lineHeight || parseInt(style['line-height'], 10) || Math.round(font * 1.4);
     if (!keepActiveValue || active !== sizeWidth) sizeWidth.value = width;
     if (!keepActiveValue || active !== sizeHeight) sizeHeight.value = height;
     if (!keepActiveValue || active !== fontSize) fontSize.value = font;
+    if (!keepActiveValue || active !== lineHeight) lineHeight.value = line;
     sizeWidthRange.max = Math.max(2400, Number(width) * 2 || 2400);
     sizeHeightRange.max = Math.max(1800, Number(height) * 2 || 1800);
     fontSizeRange.max = Math.max(160, Number(font) * 3 || 160);
+    lineHeightRange.max = Math.max(240, Number(line) * 3 || 240);
     if (!keepActiveValue || active !== sizeWidth) sizeWidthRange.value = width || 1;
     if (!keepActiveValue || active !== sizeHeight) sizeHeightRange.value = height || 1;
     if (!keepActiveValue || active !== fontSize) fontSizeRange.value = font || 16;
+    if (!keepActiveValue || active !== lineHeight) lineHeightRange.value = line || 24;
     if (!keepActiveValue || active !== posX) posX.value = translate.x;
     if (!keepActiveValue || active !== posY) posY.value = translate.y;
     if (!keepActiveValue || active !== posX) posXRange.value = translate.x;
@@ -1639,16 +1654,18 @@
   };
 
   const buildPanelStyleProps = (fields) => {
-    const set = new Set(fields || ['width', 'height', 'fontSize', 'position', 'hAlign', 'vAlign']);
+    const set = new Set(fields || ['width', 'height', 'fontSize', 'lineHeight', 'position', 'hAlign', 'vAlign']);
     const props = {};
     const width = sizeWidth.value ? Math.max(1, parseInt(sizeWidth.value, 10)) : null;
     const height = sizeHeight.value ? Math.max(1, parseInt(sizeHeight.value, 10)) : null;
     const font = fontSize.value ? Math.max(1, parseInt(fontSize.value, 10)) : null;
+    const line = lineHeight.value ? Math.max(1, parseInt(lineHeight.value, 10)) : null;
     const x = posX.value ? parseInt(posX.value, 10) : 0;
     const y = posY.value ? parseInt(posY.value, 10) : 0;
     if (set.has('width') && width != null) props.width = width + 'px';
     if (set.has('height') && height != null) props.height = height + 'px';
     if (set.has('fontSize') && font != null) props['font-size'] = font + 'px';
+    if (set.has('lineHeight') && line != null) props['line-height'] = line + 'px';
     if (set.has('position')) props.transform = 'translate(' + x + 'px, ' + y + 'px)';
     if (set.has('posX')) props.transform = 'translate(' + x + 'px, ' + (selectedElement ? parseTranslate(parseStyleMap(editor.value.slice(selectedElement.srcStart, selectedElement.srcEnd)).transform).y : y) + 'px)';
     if (set.has('posY')) props.transform = 'translate(' + (selectedElement ? parseTranslate(parseStyleMap(editor.value.slice(selectedElement.srcStart, selectedElement.srcEnd)).transform).x : x) + 'px, ' + y + 'px)';
@@ -2058,6 +2075,7 @@
     if (input === sizeWidth) applyPanelStyles(['width']);
     if (input === sizeHeight) applyPanelStyles(['height']);
     if (input === fontSize) applyPanelStyles(['fontSize']);
+    if (input === lineHeight) applyPanelStyles(['lineHeight']);
     if (input === posX || input === posY) applyPanelStyles(['position']);
   }, true);
 
@@ -2079,6 +2097,7 @@
   bindRangePair(sizeWidthRange, sizeWidth, ['width']);
   bindRangePair(sizeHeightRange, sizeHeight, ['height']);
   bindRangePair(fontSizeRange, fontSize, ['fontSize']);
+  bindRangePair(lineHeightRange, lineHeight, ['lineHeight']);
   bindRangePair(posXRange, posX, ['position']);
   bindRangePair(posYRange, posY, ['position']);
 
@@ -2100,6 +2119,7 @@
     [sizeWidth, ['width']],
     [sizeHeight, ['height']],
     [fontSize, ['fontSize']],
+    [lineHeight, ['lineHeight']],
     [posX, ['position']],
     [posY, ['position']]
   ].forEach(([input, fields]) => {
