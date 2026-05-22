@@ -1172,7 +1172,7 @@
       var el=nodes[i];
       if(!isUsefulMarqueeTarget(el))continue;
       var er=el.getBoundingClientRect();
-      if(er.width*er.height>r.width*r.height*1.05)continue;
+      if(!isNativeTextBox(el)&&er.width*er.height>r.width*r.height*1.05)continue;
       if(rectsIntersect(er,r))matches.push(el);
     }
     if(!matches.length){
@@ -1191,6 +1191,9 @@
     paintSel();
     postSelection();
   }
+  function isNativeTextBox(el){
+    return !!(el&&el.matches&&el.matches('input,textarea,[contenteditable="true"],[data-preview-editing="true"]'));
+  }
 
   document.addEventListener('mousemove',function(e){
     if(MODE==='interact')return;
@@ -1203,6 +1206,9 @@
         suppressNextClick=true;
         HO.style.display='none';HL.style.display='none';
         document.body.style.userSelect='none';
+      }
+      if(marquee.active){
+        e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
       }
       paintMarquee();
       return;
@@ -1224,8 +1230,11 @@
   document.addEventListener('mousedown',function(e){
     if(MODE==='interact'||e.button!==0)return;
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-handle'))return;
-    if(isEditingSelectedText()&&e.target===selEl)return;
-    marquee={startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,active:false,additive:e.shiftKey};
+    var targetEl=e.target&&e.target.closest?e.target.closest('[data-src-line]'):null;
+    marquee={startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,active:false,additive:e.shiftKey,startedOnTextBox:isNativeTextBox(e.target)||isNativeTextBox(targetEl)};
+    if(marquee.startedOnTextBox){
+      e.preventDefault();
+    }
   },true);
 
   document.addEventListener('mouseup',function(e){
