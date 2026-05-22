@@ -612,7 +612,7 @@
       <div class="pane-header">
         <span class="prompt">&gt;_</span>
         <span class="label">preview.live</span>
-        <span class="hint" style="margin-left:6px;font-size:11px;color:var(--text-faint);text-transform:none;letter-spacing:0;">— click to select · drag multi · esc mode</span>
+        <span class="hint" style="margin-left:6px;font-size:11px;color:var(--text-faint);text-transform:none;letter-spacing:0;">— click to select · shift-click multi · esc mode</span>
         <span class="meta"><span class="pulse" style="display:inline-block;margin-right:4px;"></span><span id="metaStatus">idle</span></span>
       </div>
       <div class="preview-wrap">
@@ -1237,7 +1237,6 @@
       e.stopPropagation();e.stopImmediatePropagation();
       return;
     }
-    marquee={startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,active:false,additive:e.shiftKey,startedOnTextBox:isNativeTextBox(e.target)||isNativeTextBox(targetEl)};
   },true);
 
   document.addEventListener('mouseup',function(e){
