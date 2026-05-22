@@ -1408,8 +1408,14 @@
 })();
 <\/script>`;
 
-  const instrument = (src) => {
+  const disableScriptAttrs = (attrs) => {
+    const withoutType = attrs.replace(/\s+type\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '');
+    return withoutType + ' type="text/plain" data-preview-script-disabled="true"';
+  };
+
+  const instrument = (src, options = {}) => {
     if (!src.trim()) return '';
+    const runPageScripts = options.runPageScripts !== false;
     const offsets = computeLineOffsets(src);
 
     const skipRanges = [];
@@ -1431,9 +1437,11 @@
     const out = src.replace(tagRe, (match, tag, attrs, selfClose, offset) => {
       if (inSkip(offset)) return match;
       if (/\sdata-src-line=/i.test(attrs)) return match;
+      const tagName = tag.toLowerCase();
+      const nextAttrs = (!runPageScripts && tagName === 'script') ? disableScriptAttrs(attrs) : attrs;
       const line = offsetToLine(offsets, offset);
       const end = offset + match.length;
-      return `<${tag}${attrs} data-src-line="${line}" data-src-start="${offset}" data-src-end="${end}"${selfClose}>`;
+      return `<${tag}${nextAttrs} data-src-line="${line}" data-src-start="${offset}" data-src-end="${end}"${selfClose}>`;
     });
 
     const bodyClose = out.lastIndexOf('</body>');
@@ -1458,7 +1466,7 @@
 
     if (pendingRestoreState == null) pendingRestoreState = capturePreviewState();
     metaStatus.textContent = 'rendering';
-    preview.srcdoc = instrument(code);
+    preview.srcdoc = instrument(code, { runPageScripts: mode === 'interact' });
     setTimeout(() => { metaStatus.textContent = 'live'; }, 150);
   };
 
@@ -1811,12 +1819,18 @@
   };
 
   const setMode = (m, silent) => {
+    const prevMode = mode;
     mode = (m === 'interact') ? 'interact' : 'edit';
     btnMode.dataset.mode = mode;
     btnMode.querySelector('.mode-label').textContent = mode;
     try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
     postModeToIframe();
     if (mode === 'interact') setSelectedElement(null);
+    if (prevMode !== mode && preview.srcdoc) {
+      pendingRestoreState = capturePreviewState();
+      if (selectedElement) pendingReselect = selectedElement.srcStart;
+      renderPreview();
+    }
     if (!silent) {
       showToast(mode === 'interact'
         ? 'interact mode — 슬라이드/링크/버튼이 정상 동작합니다'
