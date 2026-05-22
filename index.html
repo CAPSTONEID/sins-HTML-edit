@@ -612,7 +612,7 @@
       <div class="pane-header">
         <span class="prompt">&gt;_</span>
         <span class="label">preview.live</span>
-        <span class="hint" style="margin-left:6px;font-size:11px;color:var(--text-faint);text-transform:none;letter-spacing:0;">— click to select · shift+click multi · esc mode</span>
+        <span class="hint" style="margin-left:6px;font-size:11px;color:var(--text-faint);text-transform:none;letter-spacing:0;">— click to select · drag multi · esc mode</span>
         <span class="meta"><span class="pulse" style="display:inline-block;margin-right:4px;"></span><span id="metaStatus">idle</span></span>
       </div>
       <div class="preview-wrap">
@@ -678,21 +678,14 @@
             </div>
           </div>
           <div class="control-section">
-            <div class="control-title">균등분할</div>
-            <div class="stack-actions">
-              <button class="btn btn-ghost" id="btnEqualWidth" disabled>가로 균등</button>
-              <button class="btn btn-ghost" id="btnEqualHeight" disabled>세로 균등</button>
-            </div>
-            <div class="size-row" style="margin-top:8px;">
-              <label class="size-field">
-                <span>가로 기준 px</span>
-                <input type="text" id="equalBaseWidth" data-min="1" inputmode="numeric" placeholder="부모">
-              </label>
-              <label class="size-field">
-                <span>세로 기준 px</span>
-                <input type="text" id="equalBaseHeight" data-min="1" inputmode="numeric" placeholder="부모">
-              </label>
-            </div>
+            <div class="control-title">폰트 사이즈</div>
+            <label class="size-field">
+              <span>글자 크기</span>
+              <div class="range-field">
+                <input type="range" id="fontSizeRange" min="6" max="160" step="1" value="16">
+                <input type="text" id="fontSize" data-min="1" data-max="300" inputmode="numeric" value="16">
+              </div>
+            </label>
           </div>
           <div class="size-note">프리뷰 텍스트는 선택 후 바로 수정할 수 있습니다.</div>
         </div>
@@ -763,10 +756,8 @@
   const posY = $('posY');
   const hAlign = $('hAlign');
   const vAlign = $('vAlign');
-  const btnEqualWidth = $('btnEqualWidth');
-  const btnEqualHeight = $('btnEqualHeight');
-  const equalBaseWidth = $('equalBaseWidth');
-  const equalBaseHeight = $('equalBaseHeight');
+  const fontSize = $('fontSize');
+  const fontSizeRange = $('fontSizeRange');
 
   const STORAGE_KEY = 'code-to-html:draft';
   const INPUT_VISIBLE_KEY = 'code-to-html:input-visible';
@@ -840,8 +831,10 @@
   // selection box
   var SEL=document.createElement('div');
   var DIM=document.createElement('div');
+  var MARQUEE=document.createElement('div');
   SEL.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:1.5px solid #D4FF5C;box-sizing:border-box;display:none;box-shadow:0 0 0 1px rgba(34,21,46,0.85) inset,0 0 18px rgba(212,255,92,0.25);';
   DIM.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#D4FF5C;color:#22152E;padding:2px 7px;border-radius:3px;font:11px/1.4 ui-monospace,monospace;font-weight:700;display:none;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+  MARQUEE.style.cssText='position:fixed;pointer-events:none;z-index:2147483644;border:1.5px dashed #D4FF5C;background:rgba(212,255,92,0.14);box-sizing:border-box;display:none;';
 
   var HANDLES={};
   POS.forEach(function(p){
@@ -851,7 +844,7 @@
     HANDLES[p]=h;
   });
 
-  var hoverEl=null, selEl=null, selectedEls=[], dragging=null, editTimer=null;
+  var hoverEl=null, selEl=null, selectedEls=[], dragging=null, marquee=null, suppressNextClick=false, editTimer=null;
 
   function cleanPreviewHtml(el){
     var clone=el.cloneNode(true);
@@ -896,6 +889,7 @@
       tag:el.tagName.toLowerCase(),
       width:Math.round(r.width),
       height:Math.round(r.height),
+      fontSize:Math.round(parseFloat(getComputedStyle(el).fontSize)||0),
       canTextEdit:canEditText(el)
     };
   }
@@ -912,6 +906,7 @@
         tag:el.tagName.toLowerCase(),
         width:Math.round(r.width),
         height:Math.round(r.height),
+        fontSize:Math.round(parseFloat(getComputedStyle(el).fontSize)||0),
         canTextEdit:canEditText(el)
       });
     }
@@ -978,39 +973,6 @@
     }
     paintSel();
   }
-  function distributeSelected(axis,baseSize){
-    if(selectedEls.length<2)return;
-    var parent=selectedEls[0].parentElement;
-    if(!parent)return;
-    for(var i=1;i<selectedEls.length;i++){
-      if(selectedEls[i].parentElement!==parent)return;
-    }
-    var pr=parent.getBoundingClientRect();
-    var basis=parseFloat(baseSize);
-    if(!basis||basis<1) basis=axis==='height'?pr.height:pr.width;
-    var value=Math.max(1,Math.floor(basis/selectedEls.length));
-    var updates=[];
-    for(var j=0;j<selectedEls.length;j++){
-      var el=selectedEls[j];
-      var props={};
-      if(axis==='height'){
-        props.height=value+'px';
-      } else {
-        props.width=value+'px';
-        props.display='inline-block';
-        props['box-sizing']='border-box';
-      }
-      Object.keys(props).forEach(function(k){el.style.setProperty(k,props[k]);});
-      updates.push({
-        srcStart:parseInt(el.getAttribute('data-src-start'),10),
-        srcEnd:parseInt(el.getAttribute('data-src-end'),10),
-        props:props
-      });
-    }
-    paintSel();
-    P.postMessage({type:'batch-style',updates:updates,axis:axis,baseSize:basis},'*');
-    postSelection();
-  }
   function readTranslate(el){
     var m=String(el.style.transform||'').match(/translate\(\s*(-?\d+(?:\.\d+)?)px(?:\s*,\s*(-?\d+(?:\.\d+)?)px)?\s*\)/i);
     return {
@@ -1076,6 +1038,7 @@
       document.body.appendChild(HL);
       document.body.appendChild(SEL);
       document.body.appendChild(DIM);
+      document.body.appendChild(MARQUEE);
       POS.forEach(function(p){document.body.appendChild(HANDLES[p]);});
       POS.forEach(function(p){
         HANDLES[p].addEventListener('mousedown',function(e){onHandleDown(e,p);});
@@ -1163,10 +1126,76 @@
     if(el){HO.style.display='none';HL.style.display='none';}
     paintSel();
   }
+  function rectsIntersect(a,b){
+    return a.left<=b.right&&a.right>=b.left&&a.top<=b.bottom&&a.bottom>=b.top;
+  }
+  function isUsefulMarqueeTarget(el){
+    if(!el||!el.getAttribute||!el.getAttribute('data-src-line'))return false;
+    if(/^(html|head|body|script|style|link|meta)$/i.test(el.tagName))return false;
+    var r=el.getBoundingClientRect();
+    return r.width>=2&&r.height>=2;
+  }
+  function getMarqueeRect(){
+    if(!marquee)return null;
+    var left=Math.min(marquee.startX,marquee.x);
+    var top=Math.min(marquee.startY,marquee.y);
+    var right=Math.max(marquee.startX,marquee.x);
+    var bottom=Math.max(marquee.startY,marquee.y);
+    return {left:left,top:top,right:right,bottom:bottom,width:right-left,height:bottom-top};
+  }
+  function paintMarquee(){
+    var r=getMarqueeRect();
+    if(!r||!marquee.active){MARQUEE.style.display='none';return;}
+    MARQUEE.style.display='block';
+    MARQUEE.style.left=r.left+'px';
+    MARQUEE.style.top=r.top+'px';
+    MARQUEE.style.width=r.width+'px';
+    MARQUEE.style.height=r.height+'px';
+  }
+  function selectByMarquee(additive){
+    var r=getMarqueeRect();
+    if(!r)return;
+    var matches=[];
+    var nodes=document.querySelectorAll('[data-src-line]');
+    for(var i=0;i<nodes.length;i++){
+      var el=nodes[i];
+      if(!isUsefulMarqueeTarget(el))continue;
+      var er=el.getBoundingClientRect();
+      if(er.width*er.height>r.width*r.height*1.05)continue;
+      if(rectsIntersect(er,r))matches.push(el);
+    }
+    if(!matches.length){
+      if(!additive)select(null);
+      return;
+    }
+    if(!additive)clearMultiOutlines();
+    var next=additive?selectedEls.slice():[];
+    for(var j=0;j<matches.length;j++){
+      if(next.indexOf(matches[j])<0)next.push(matches[j]);
+    }
+    selectedEls=next;
+    selEl=matches[matches.length-1];
+    setEditable(null);
+    HO.style.display='none';HL.style.display='none';
+    paintSel();
+    postSelection();
+  }
 
   document.addEventListener('mousemove',function(e){
     if(MODE==='interact')return;
     if(dragging)return;
+    if(marquee){
+      marquee.x=e.clientX;
+      marquee.y=e.clientY;
+      if(!marquee.active&&(Math.abs(marquee.x-marquee.startX)>4||Math.abs(marquee.y-marquee.startY)>4)){
+        marquee.active=true;
+        suppressNextClick=true;
+        HO.style.display='none';HL.style.display='none';
+        document.body.style.userSelect='none';
+      }
+      paintMarquee();
+      return;
+    }
     var el=e.target&&e.target.closest?e.target.closest('[data-src-line]'):null;
     if(el!==hoverEl){hoverEl=el;paintHover(el);}
   },true);
@@ -1181,8 +1210,33 @@
   document.addEventListener('keydown',stopPageShortcutWhileEditing,true);
   document.addEventListener('keyup',stopPageShortcutWhileEditing,true);
 
+  document.addEventListener('mousedown',function(e){
+    if(MODE==='interact'||e.button!==0)return;
+    if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-handle'))return;
+    if(isEditingSelectedText()&&e.target===selEl)return;
+    marquee={startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,active:false,additive:e.shiftKey};
+  },true);
+
+  document.addEventListener('mouseup',function(e){
+    if(!marquee)return;
+    var wasActive=marquee.active;
+    var additive=marquee.additive||e.shiftKey;
+    if(wasActive){
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+      selectByMarquee(additive);
+    }
+    marquee=null;
+    MARQUEE.style.display='none';
+    document.body.style.userSelect='';
+  },true);
+
   document.addEventListener('click',function(e){
     if(MODE==='interact')return;
+    if(suppressNextClick){
+      suppressNextClick=false;
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+      return;
+    }
     if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-handle'))return;
     var el=e.target&&e.target.closest?e.target.closest('[data-src-line]'):null;
     if(el){
@@ -1267,10 +1321,11 @@
       MODE=d.mode;
       if(MODE==='interact'){
         clearMultiOutlines();
-        hoverEl=null;selEl=null;dragging=null;
+        hoverEl=null;selEl=null;dragging=null;marquee=null;
         selectedEls=[];
         HO.style.display='none';HL.style.display='none';
         SEL.style.display='none';DIM.style.display='none';
+        MARQUEE.style.display='none';
         POS.forEach(function(p){HANDLES[p].style.display='none';});
         document.body.style.cursor='';
       }
@@ -1311,10 +1366,6 @@
         updateSourceRanges(ch.srcStart,ch.oldSrcEnd,ch.newSrcEnd);
       }
       postSelection();
-      return;
-    }
-    if(d.type==='distribute-selected'&&(d.axis==='width'||d.axis==='height')){
-      distributeSelected(d.axis,d.baseSize);
       return;
     }
     if(d.type==='align-selected-group'&&(d.axis==='x'||d.axis==='y')){
@@ -1544,8 +1595,6 @@
       selectedElements = [];
       sizePanel.hidden = true;
       previewWrap.classList.remove('tools-open');
-      btnEqualWidth.disabled = true;
-      btnEqualHeight.disabled = true;
       return;
     }
     selectedElements = Array.isArray(data.items) && data.items.length ? data.items : [data];
@@ -1562,12 +1611,16 @@
     const keepActiveValue = Date.now() < suppressPanelSyncUntil && sizePanel.contains(active);
     const width = data.width || '';
     const height = data.height || '';
+    const font = data.fontSize || parseInt(style['font-size'], 10) || 16;
     if (!keepActiveValue || active !== sizeWidth) sizeWidth.value = width;
     if (!keepActiveValue || active !== sizeHeight) sizeHeight.value = height;
+    if (!keepActiveValue || active !== fontSize) fontSize.value = font;
     sizeWidthRange.max = Math.max(2400, Number(width) * 2 || 2400);
     sizeHeightRange.max = Math.max(1800, Number(height) * 2 || 1800);
+    fontSizeRange.max = Math.max(160, Number(font) * 3 || 160);
     if (!keepActiveValue || active !== sizeWidth) sizeWidthRange.value = width || 1;
     if (!keepActiveValue || active !== sizeHeight) sizeHeightRange.value = height || 1;
+    if (!keepActiveValue || active !== fontSize) fontSizeRange.value = font || 16;
     if (!keepActiveValue || active !== posX) posX.value = translate.x;
     if (!keepActiveValue || active !== posY) posY.value = translate.y;
     if (!keepActiveValue || active !== posX) posXRange.value = translate.x;
@@ -1580,22 +1633,22 @@
     if (style['align-self'] === 'start' || style['vertical-align'] === 'top') vAlign.value = 'top';
     else if (style['align-self'] === 'center' || style['vertical-align'] === 'middle') vAlign.value = 'middle';
     else if (style['align-self'] === 'end' || style['vertical-align'] === 'bottom') vAlign.value = 'bottom';
-    btnEqualWidth.disabled = selectedElements.length < 2;
-    btnEqualHeight.disabled = selectedElements.length < 2;
     sizePanel.hidden = false;
     sizePanel.classList.toggle('collapsed', panelCollapsed);
     previewWrap.classList.toggle('tools-open', !panelCollapsed);
   };
 
   const buildPanelStyleProps = (fields) => {
-    const set = new Set(fields || ['width', 'height', 'position', 'hAlign', 'vAlign']);
+    const set = new Set(fields || ['width', 'height', 'fontSize', 'position', 'hAlign', 'vAlign']);
     const props = {};
     const width = sizeWidth.value ? Math.max(1, parseInt(sizeWidth.value, 10)) : null;
     const height = sizeHeight.value ? Math.max(1, parseInt(sizeHeight.value, 10)) : null;
+    const font = fontSize.value ? Math.max(1, parseInt(fontSize.value, 10)) : null;
     const x = posX.value ? parseInt(posX.value, 10) : 0;
     const y = posY.value ? parseInt(posY.value, 10) : 0;
     if (set.has('width') && width != null) props.width = width + 'px';
     if (set.has('height') && height != null) props.height = height + 'px';
+    if (set.has('fontSize') && font != null) props['font-size'] = font + 'px';
     if (set.has('position')) props.transform = 'translate(' + x + 'px, ' + y + 'px)';
     if (set.has('posX')) props.transform = 'translate(' + x + 'px, ' + (selectedElement ? parseTranslate(parseStyleMap(editor.value.slice(selectedElement.srcStart, selectedElement.srcEnd)).transform).y : y) + 'px)';
     if (set.has('posY')) props.transform = 'translate(' + (selectedElement ? parseTranslate(parseStyleMap(editor.value.slice(selectedElement.srcStart, selectedElement.srcEnd)).transform).x : x) + 'px, ' + y + 'px)';
@@ -1824,7 +1877,7 @@
     } else if (d.type === 'toggle-mode') {
       setMode(mode === 'edit' ? 'interact' : 'edit');
     } else if (d.type === 'batch-style') {
-      applyBatchStyleProps(d.updates, d.axis === 'height' ? '세로 균등분할 적용' : '가로 균등분할 적용');
+      applyBatchStyleProps(d.updates, d.axis === 'align' ? '정렬 적용' : '스타일 적용');
     } else if (d.type === 'drag-start') {
       iframeDragging = true;
       firstDragMove = true;
@@ -2004,6 +2057,7 @@
     if (range) range.value = input.value;
     if (input === sizeWidth) applyPanelStyles(['width']);
     if (input === sizeHeight) applyPanelStyles(['height']);
+    if (input === fontSize) applyPanelStyles(['fontSize']);
     if (input === posX || input === posY) applyPanelStyles(['position']);
   }, true);
 
@@ -2024,6 +2078,7 @@
 
   bindRangePair(sizeWidthRange, sizeWidth, ['width']);
   bindRangePair(sizeHeightRange, sizeHeight, ['height']);
+  bindRangePair(fontSizeRange, fontSize, ['fontSize']);
   bindRangePair(posXRange, posX, ['position']);
   bindRangePair(posYRange, posY, ['position']);
 
@@ -2041,21 +2096,10 @@
     }
     applyPanelStyles(['vAlign']);
   });
-  btnEqualWidth.addEventListener('click', () => {
-    const baseSize = equalBaseWidth.value ? Math.max(1, parseFloat(equalBaseWidth.value)) : null;
-    try { preview.contentWindow.postMessage({ type: 'distribute-selected', axis: 'width', baseSize }, '*'); } catch (err) {}
-  });
-  btnEqualHeight.addEventListener('click', () => {
-    const baseSize = equalBaseHeight.value ? Math.max(1, parseFloat(equalBaseHeight.value)) : null;
-    try { preview.contentWindow.postMessage({ type: 'distribute-selected', axis: 'height', baseSize }, '*'); } catch (err) {}
-  });
-
-  bindArrowStep(equalBaseWidth, null);
-  bindArrowStep(equalBaseHeight, null);
-
   [
     [sizeWidth, ['width']],
     [sizeHeight, ['height']],
+    [fontSize, ['fontSize']],
     [posX, ['position']],
     [posY, ['position']]
   ].forEach(([input, fields]) => {
