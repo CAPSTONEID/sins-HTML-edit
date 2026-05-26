@@ -1547,8 +1547,10 @@
     let end = v.indexOf('>', start);
     end = end === -1 ? start + needle.length : end + 1;
 
-    if (focusEditor) editor.focus();
-    editor.setSelectionRange(start, end);
+    if (focusEditor) {
+      editor.focus();
+      editor.setSelectionRange(start, end);
+    }
 
     const lineH = parseFloat(getComputedStyle(editor).lineHeight) || 21;
     const targetTop = Math.max(0, (line - 3) * lineH);
