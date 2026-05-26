@@ -1063,6 +1063,32 @@
     selection.addRange(range);
     return true;
   }
+  function focusTextAtPoint(el,e){
+    if(!el||!canEditText(el))return false;
+    try{el.focus({preventScroll:true});}catch(err){el.focus();}
+    var range=null;
+    if(document.caretRangeFromPoint){
+      range=document.caretRangeFromPoint(e.clientX,e.clientY);
+    } else if(document.caretPositionFromPoint){
+      var pos=document.caretPositionFromPoint(e.clientX,e.clientY);
+      if(pos){
+        range=document.createRange();
+        range.setStart(pos.offsetNode,pos.offset);
+      }
+    }
+    if(range){
+      var container=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
+      if(container&&el.contains(container)){
+        range.collapse(true);
+        var selection=window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      }
+    }
+    selEl=el;
+    return focusSelectedTextEnd();
+  }
   function insertSelectedTextLineBreak(){
     if(!selEl||!canEditText(selEl))return false;
     if(!isEditingSelectedText()&&!focusSelectedTextEnd())return false;
@@ -1085,6 +1111,10 @@
     return true;
   }
   function stopPageShortcutWhileEditing(e){
+    if(e.type!=='keydown'){
+      if(isEditingSelectedText()&&e.key!=='Escape')e.stopImmediatePropagation();
+      return;
+    }
     if(e.key==='Enter'&&MODE!=='interact'&&selEl&&canEditText(selEl)){
       e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
       insertSelectedTextLineBreak();
@@ -1285,6 +1315,7 @@
     var targetEl=e.target&&e.target.closest?e.target.closest('[data-src-line]'):null;
     if(targetEl&&canEditText(targetEl)&&!e.shiftKey){
       select(targetEl,false);
+      focusTextAtPoint(targetEl,e);
       postSelection();
       e.stopPropagation();e.stopImmediatePropagation();
       return;
@@ -1317,6 +1348,7 @@
       if(!canEditText(el)||e.shiftKey)e.preventDefault();
       e.stopPropagation();e.stopImmediatePropagation();
       select(el,e.shiftKey);
+      if(canEditText(el)&&!e.shiftKey)focusTextAtPoint(el,e);
       postSelection();
     } else {
       select(null);
