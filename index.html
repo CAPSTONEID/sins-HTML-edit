@@ -936,6 +936,21 @@
   function postState(){
     P.postMessage({type:'preview-state',hash:location.hash||'',scrollX:window.scrollX||0,scrollY:window.scrollY||0},'*');
   }
+  function isKeyboardInputTarget(el){
+    return !!(el&&el.closest&&el.closest('input,textarea,select,[contenteditable="true"],[data-preview-editing="true"]'));
+  }
+  function forwardKeyToPage(key){
+    if(!key||MODE!=='interact')return;
+    if(isKeyboardInputTarget(document.activeElement))return;
+    var target=document.activeElement&&document.activeElement!==document.documentElement?document.activeElement:document.body;
+    var eventInit={
+      key:key,
+      code:key,
+      bubbles:true,
+      cancelable:true
+    };
+    target.dispatchEvent(new KeyboardEvent('keydown',eventInit));
+  }
   function restoreState(state){
     if(!state)return;
     if(typeof state.hash==='string'&&state.hash&&location.hash!==state.hash) location.hash=state.hash;
@@ -1403,6 +1418,10 @@
       postState();
       return;
     }
+    if(d.type==='forward-key'){
+      forwardKeyToPage(d.key);
+      return;
+    }
     if(d.type==='apply-style'&&typeof d.srcStart==='number'&&typeof d.oldSrcEnd==='number'&&typeof d.newSrcEnd==='number'){
       updateSourceRanges(d.srcStart,d.oldSrcEnd,d.newSrcEnd);
       applyStylePropsToSelected(d.props);
@@ -1859,13 +1878,23 @@
     try { preview.contentWindow.postMessage({ type: 'set-mode', mode }, '*'); } catch (err) {}
   };
 
+  const focusPreview = () => {
+    try {
+      preview.focus();
+      preview.contentWindow.focus();
+    } catch (err) {}
+  };
+
   const setMode = (m, silent) => {
     mode = (m === 'interact') ? 'interact' : 'edit';
     btnMode.dataset.mode = mode;
     btnMode.querySelector('.mode-label').textContent = mode;
     try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
     postModeToIframe();
-    if (mode === 'interact') setSelectedElement(null);
+    if (mode === 'interact') {
+      setSelectedElement(null);
+      setTimeout(focusPreview, 0);
+    }
     if (!silent) {
       showToast(mode === 'interact'
         ? 'interact mode — 슬라이드/링크/버튼이 정상 동작합니다'
@@ -1881,6 +1910,33 @@
       e.preventDefault();
       setMode(mode === 'edit' ? 'interact' : 'edit');
     }
+  });
+
+  const isParentTextInput = (el) => !!(el && el.closest && el.closest('input,textarea,select,[contenteditable="true"]'));
+  const isPreviewNavKey = (e) => (
+    e.key === 'ArrowRight' ||
+    e.key === 'ArrowLeft' ||
+    e.key === 'PageDown' ||
+    e.key === 'PageUp' ||
+    e.key === 'Home' ||
+    e.key === 'End' ||
+    e.key === 'Enter' ||
+    e.key === ' ' ||
+    e.key === 'Spacebar' ||
+    e.code === 'Space'
+  );
+
+  window.addEventListener('keydown', (e) => {
+    if (mode !== 'interact' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!isPreviewNavKey(e) || isParentTextInput(e.target)) return;
+    e.preventDefault();
+    focusPreview();
+    try {
+      preview.contentWindow.postMessage({
+        type: 'forward-key',
+        key: e.code === 'Space' || e.key === 'Spacebar' ? ' ' : e.key
+      }, '*');
+    } catch (err) {}
   });
 
   preview.addEventListener('load', () => {
